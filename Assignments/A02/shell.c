@@ -29,10 +29,39 @@ int main(void)
         /* command line arguments*/
         int arg_count = 0;
         char **args = process_command(cmd, &arg_count);
-
+    
         /* add command to history */
         add_to_history(history, cmd, &cmd_count);
 
+        /* terminate when exit is entered */
+        if (strcmp(cmd, "exit") == 0){
+            should_run = 0;
+            continue;
+        }
+
+        /* history print the last 5 commands */
+        if (strcmp(cmd, "history") == 0){
+            int bound = cmd_count < 5 ? cmd_count : 5;
+            for (int i=0; i<bound; i++){
+                printf("%d %s\n", cmd_count-i, history[i]);
+            }
+            continue;
+        }
+
+        /* !! */
+        if (strcmp(cmd, "!!") == 0){
+            if (cmd_count == 0){
+                printf("No commands in history.\n");
+            } 
+            // execute the last command
+            arg_count = 0;
+            args = process_command(history[1], &arg_count);
+            add_to_history(history, cmd, &cmd_count);
+            if (execvp(args[0], args) == -1){ 
+                fprintf(stderr, "execvp failed\n");
+            }
+            continue;
+        }
         /**
          * After reading user input, the steps are:
          * (1) for a child process using fork()
@@ -48,36 +77,6 @@ int main(void)
             fprintf(stderr, "Fork Failed\n");
             return 1;
         } else if (pid == 0){ /* child process */
-            /* terminate when exit is entered */
-            if (strcmp(args[0], "exit") == 0){
-                should_run = 0;
-                continue;
-            }
-
-            /* history print the last 5 commands */
-            if (strcmp(cmd, "history") == 0){
-                int bound = cmd_count > 4 ? 5 : cmd_count;
-                for (int i=0; i<bound; i++){
-                    int index = cmd_count > 4 ? 4-i : cmd_count-i;
-                    printf("%d %s\n", cmd_count-i, history[index]);
-                }
-            }
-
-            /* !! */
-            if (strcmp(cmd, "!!") == 0){
-                if (cmd_count == 0){
-                    printf("No commands in history.\n");
-                } 
-                // execute the last command
-                arg_count = 0;
-                args = process_command(history[3], &arg_count);
-                add_to_history(history, cmd, &cmd_count);
-                if (execvp(args[0], args) == -1){ 
-                    fprintf(stderr, "execvp failed\n");
-                    continue;
-                }
-                continue;
-            }
                 if (strcmp(args[arg_count-1], "&") == 0) { 
                     args[arg_count-1] = NULL; // remove &
                 }
@@ -86,13 +85,11 @@ int main(void)
                     continue;
                 }
         } else { /* parent process */
-            if (strcmp(args[arg_count-1], "&") == 0) { 
-                // run concurrrently
-            } else { /* parent waits */
-                wait(NULL);
+            if (strcmp(args[arg_count-1], "&") != 0) { 
+                wait(NULL); /* parent waits */
             }
+            // run concurrrently
         }
-
     }
     return 0;
 }
@@ -101,9 +98,14 @@ char **process_command(char cmd[], int *arg_count){
     char **args = malloc((MAX_LINE / 2 + 1) * sizeof(char *));    
     char *token;
     cmd[strcspn(cmd, "\n")] = 0; // remove \n
-    token = strtok(cmd, " ");
+
+    char cmd_copy[MAX_LINE];
+    strcpy(cmd_copy, cmd); // make a copy of cmd
+
+    token = strtok(cmd_copy, " ");
     while (token != NULL) {
-        args[*arg_count] = token;  // Store each token (argument) in the args array
+        args[*arg_count] = malloc(strlen(token) + 1);
+        strcpy(args[*arg_count], token);
         (*arg_count)++; 
         token = strtok(NULL, " ");
     }
@@ -112,14 +114,10 @@ char **process_command(char cmd[], int *arg_count){
 }
 
 void add_to_history(char history[][MAX_LINE], char cmd[], int *cmd_count){
-    if (*cmd_count < 4){
-        strcpy(history[*cmd_count],cmd);
-    } else {
-        for (int i=1; i<5; i++){
-            strcpy(history[i-1],history[i]);
-        }
-        strcpy(history[4],cmd);
+    for (int i=4; i>0; i--){
+        strcpy(history[i],history[i-1]);
     }
+    strcpy(history[0],cmd);
     (*cmd_count)++;
 }
 
