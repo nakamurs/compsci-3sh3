@@ -23,24 +23,20 @@ int main(void)
         /* read command */
         char cmd[MAX_LINE];
         if (fgets(cmd, MAX_LINE, stdin) == NULL){
-            fprintf(stderr, "Error reading command");
+            fprintf(stderr, "Error reading command\n");
             continue;
         }
-        /* command line arguments*/
         int arg_count = 0;
         char **args = process_command(cmd, &arg_count);
-    
-        /* add command to history */
-        add_to_history(history, cmd, &cmd_count);
 
-        /* terminate when exit is entered */
+        /* exit: terminate */
         if (strcmp(cmd, "exit") == 0){
             should_run = 0;
             continue;
         }
 
-        /* history print the last 5 commands */
-        if (strcmp(cmd, "history") == 0){
+        /* history: print the last 5 commands */
+        if (strcmp(cmd, "history") == 0){ 
             int bound = cmd_count < 5 ? cmd_count : 5;
             for (int i=0; i<bound; i++){
                 printf("%d %s\n", cmd_count-i, history[i]);
@@ -48,28 +44,31 @@ int main(void)
             continue;
         }
 
-        /* !! */
-        if (strcmp(cmd, "!!") == 0){
+        /* !!: execute the last command */
+        if (strcmp(cmd, "!!") == 0){ 
             if (cmd_count == 0){
-                printf("No commands in history.\n");
+                printf("No commands in history\n");
+                continue;
             } 
-            // execute the last command
-            arg_count = 0;
-            args = process_command(history[1], &arg_count);
-            add_to_history(history, cmd, &cmd_count);
-            if (execvp(args[0], args) == -1){ 
-                fprintf(stderr, "execvp failed\n");
+            char cmd2[MAX_LINE];
+            strcpy(cmd2, history[0]);
+            int arg_count2 = 0;
+            char **args2 = process_command(cmd2, &arg_count2);
+            add_to_history(history, cmd2, &cmd_count);
+            if (execvp(args2[0], args2) == -1){ 
+                fprintf(stderr, "Error executing command\n");
             }
             continue;
-        }
-        /**
-         * After reading user input, the steps are:
-         * (1) for a child process using fork()
-         * (2) the child process will invoke execvp()
-         * (3) parent will invoke wait() unless command included &
-         */
+        } 
 
-        /* create the child process and execute the command in the child */
+        add_to_history(history, cmd, &cmd_count);
+
+        /* remove & */
+        if (strcmp(args[arg_count-1], "&") == 0) { 
+            args[arg_count-1] = NULL; 
+        }
+
+        /* fork a child process */
         pid_t pid;
         pid = fork();
 
@@ -77,13 +76,11 @@ int main(void)
             fprintf(stderr, "Fork Failed\n");
             return 1;
         } else if (pid == 0){ /* child process */
-                if (strcmp(args[arg_count-1], "&") == 0) { 
-                    args[arg_count-1] = NULL; // remove &
-                }
-                if (execvp(args[0], args) == -1){ 
-                    fprintf(stderr, "execvp failed\n");
-                    continue;
-                }
+            /* execute the command */
+            if (execvp(args[0], args) == -1){ 
+                fprintf(stderr, "Error executing command\n");
+                continue;
+            }
         } else { /* parent process */
             if (strcmp(args[arg_count-1], "&") != 0) { 
                 wait(NULL); /* parent waits */
